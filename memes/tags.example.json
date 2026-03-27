@@ -1,0 +1,12 @@
+{
+  "images": [
+    {
+      "file": "peace_example.jpg",
+      "tags": ["peace", "two_fingers", "smile", "meme"]
+    },
+    {
+      "file": "thumbs_up_example.jpg",
+      "tags": ["thumbs_up", "approval", "meme"]
+    }
+  ]
+}
