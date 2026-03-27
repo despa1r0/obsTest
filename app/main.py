@@ -53,12 +53,21 @@ def draw_labels(frame, gestures) -> None:
         )
 
 
+def should_stop(window_name: str, key: int) -> bool:
+    if key in QUIT_KEYS:
+        return True
+    return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
+
+
 def main() -> None:
     capture = cv2.VideoCapture(0)
     detector = HandGestureDetector(model_path=MODEL_PATH)
 
     if not capture.isOpened():
         raise RuntimeError("Could not open the default camera.")
+
+    print("Camera stream started.")
+    print("Press Esc to stop the script. You can also press Q or close the window.")
 
     start_time = perf_counter()
 
@@ -77,11 +86,12 @@ def main() -> None:
 
             cv2.imshow(WINDOW_NAME, frame)
             key = cv2.waitKey(1) & 0xFF
-            if key in QUIT_KEYS:
+            if should_stop(WINDOW_NAME, key):
                 break
     except KeyboardInterrupt:
         pass
     finally:
+        print("Stopping camera stream.")
         detector.close()
         capture.release()
         cv2.destroyAllWindows()
