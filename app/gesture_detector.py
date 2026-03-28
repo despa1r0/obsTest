@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 from typing import Iterable
 
@@ -17,6 +18,24 @@ from mediapipe.tasks.python.vision.hand_landmarker import HandLandmarksConnectio
 class GestureResult:
     gesture_name: str
     handedness: str
+
+
+@dataclass(slots=True)
+class FingerState:
+    thumb_up: bool
+    index_extended: bool
+    middle_extended: bool
+    ring_extended: bool
+    pinky_extended: bool
+
+    @property
+    def pattern(self) -> tuple[bool, bool, bool, bool]:
+        return (
+            self.index_extended,
+            self.middle_extended,
+            self.ring_extended,
+            self.pinky_extended,
+        )
 
 
 class HandGestureDetector:
@@ -73,60 +92,92 @@ class HandGestureDetector:
             results.handedness,
         ):
             label = handedness[0].category_name
-            gesture_name = self._classify_from_landmarks(hand_landmarks, label)
+            gesture_name = self._classify_from_landmarks(hand_landmarks)
             classified.append(GestureResult(gesture_name=gesture_name, handedness=label))
 
         return classified
 
-    def _classify_from_landmarks(self, landmarks: Iterable, handedness: str) -> str:
+    def _classify_from_landmarks(self, landmarks: Iterable) -> str:
         points = list(landmarks)
+        palm_size = self._get_palm_size(points)
+        fingers = FingerState(
+            thumb_up=self._is_thumb_up(points, palm_size),
+            index_extended=self._is_finger_extended(
+                points,
+                tip_id=HandLandmark.INDEX_FINGER_TIP,
+                pip_id=HandLandmark.INDEX_FINGER_PIP,
+                mcp_id=HandLandmark.INDEX_FINGER_MCP,
+                palm_size=palm_size,
+            ),
+            middle_extended=self._is_finger_extended(
+                points,
+                tip_id=HandLandmark.MIDDLE_FINGER_TIP,
+                pip_id=HandLandmark.MIDDLE_FINGER_PIP,
+                mcp_id=HandLandmark.MIDDLE_FINGER_MCP,
+                palm_size=palm_size,
+            ),
+            ring_extended=self._is_finger_extended(
+                points,
+                tip_id=HandLandmark.RING_FINGER_TIP,
+                pip_id=HandLandmark.RING_FINGER_PIP,
+                mcp_id=HandLandmark.RING_FINGER_MCP,
+                palm_size=palm_size,
+            ),
+            pinky_extended=self._is_finger_extended(
+                points,
+                tip_id=HandLandmark.PINKY_TIP,
+                pip_id=HandLandmark.PINKY_PIP,
+                mcp_id=HandLandmark.PINKY_MCP,
+                palm_size=palm_size,
+            ),
+        )
 
-        thumb_open = self._is_thumb_extended(points, handedness)
-        index_open = self._is_finger_extended(
-            points,
-            tip_id=HandLandmark.INDEX_FINGER_TIP,
-            pip_id=HandLandmark.INDEX_FINGER_PIP,
-        )
-        middle_open = self._is_finger_extended(
-            points,
-            tip_id=HandLandmark.MIDDLE_FINGER_TIP,
-            pip_id=HandLandmark.MIDDLE_FINGER_PIP,
-        )
-        ring_open = self._is_finger_extended(
-            points,
-            tip_id=HandLandmark.RING_FINGER_TIP,
-            pip_id=HandLandmark.RING_FINGER_PIP,
-        )
-        pinky_open = self._is_finger_extended(
-            points,
-            tip_id=HandLandmark.PINKY_TIP,
-            pip_id=HandLandmark.PINKY_PIP,
-        )
+        gesture_by_pattern = {
+            (True, True, True, True): "open_palm",
+            (True, True, False, False): "peace",
+        }
 
-        opened = [thumb_open, index_open, middle_open, ring_open, pinky_open]
-
-        if all(opened):
-            return "open_palm"
-        if not any(opened):
-            return "fist"
-        if index_open and middle_open and not ring_open and not pinky_open and not thumb_open:
-            return "peace"
-        if thumb_open and not index_open and not middle_open and not ring_open and not pinky_open:
-            return "thumbs_up"
+        if fingers.pattern in gesture_by_pattern:
+            return gesture_by_pattern[fingers.pattern]
+        if fingers.pattern == (False, False, False, False):
+            return "thumbs_up" if fingers.thumb_up else "fist"
         return "unknown"
 
     @staticmethod
-    def _is_finger_extended(points, tip_id, pip_id) -> bool:
-        return points[tip_id].y < points[pip_id].y
+    def _get_palm_size(points) -> float:
+        wrist = points[HandLandmark.WRIST]
+        middle_mcp = points[HandLandmark.MIDDLE_FINGER_MCP]
+        return max(
+            math.hypot(middle_mcp.x - wrist.x, middle_mcp.y - wrist.y),
+            1e-6,
+        )
 
     @staticmethod
-    def _is_thumb_extended(points, handedness: str) -> bool:
+    def _is_finger_extended(points, tip_id, pip_id, mcp_id, palm_size: float) -> bool:
+        tip = points[tip_id]
+        pip = points[pip_id]
+        mcp = points[mcp_id]
+
+        tip_above_pip = tip.y < pip.y
+        pip_above_mcp = pip.y < mcp.y
+        finger_span = mcp.y - tip.y
+        return tip_above_pip and pip_above_mcp and finger_span > palm_size * 0.25
+
+    @staticmethod
+    def _is_thumb_up(points, palm_size: float) -> bool:
         thumb_tip = points[HandLandmark.THUMB_TIP]
         thumb_ip = points[HandLandmark.THUMB_IP]
+        thumb_mcp = points[HandLandmark.THUMB_MCP]
+        index_mcp = points[HandLandmark.INDEX_FINGER_MCP]
         wrist = points[HandLandmark.WRIST]
 
-        horizontal_extension = (
-            thumb_tip.x > thumb_ip.x if handedness == "Right" else thumb_tip.x < thumb_ip.x
+        vertical_order_is_up = thumb_tip.y < thumb_ip.y < thumb_mcp.y
+        thumb_is_high_enough = thumb_tip.y < wrist.y - palm_size * 0.05
+        thumb_is_centered = abs(thumb_tip.x - thumb_mcp.x) < palm_size * 1.2
+        thumb_is_far_from_index_base = abs(thumb_tip.x - index_mcp.x) > palm_size * 0.15
+        return (
+            vertical_order_is_up
+            and thumb_is_high_enough
+            and thumb_is_centered
+            and thumb_is_far_from_index_base
         )
-        vertical_extension = thumb_tip.y < wrist.y
-        return horizontal_extension or vertical_extension
