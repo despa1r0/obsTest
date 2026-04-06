@@ -1,12 +1,28 @@
 {
   "images": [
     {
-      "file": "peace_example.jpg",
-      "tags": ["peace", "two_fingers", "smile", "meme"]
+      "file": "peace_happy_example.jpg",
+      "tags": ["peace", "two_fingers", "happy", "meme"]
     },
     {
-      "file": "thumbs_up_example.jpg",
-      "tags": ["thumbs_up", "approval", "meme"]
+      "file": "double_peace_example.jpg",
+      "tags": ["peace", "left_peace", "right_peace", "happy", "meme"]
+    },
+    {
+      "file": "thumbs_up_neutral_example.jpg",
+      "tags": ["thumbs_up", "neutral", "approval", "meme"]
+    },
+    {
+      "file": "fist_angry_example.jpg",
+      "tags": ["fist", "angry", "rage", "meme"]
+    },
+    {
+      "file": "surprised.jpg",
+      "tags": ["open_palm", "surprised", "wow", "meme"]
+    },
+    {
+      "file": "point_sad_example.jpg",
+      "tags": ["point", "sad", "dramatic", "meme"]
     }
   ]
 }

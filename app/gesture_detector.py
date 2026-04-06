@@ -8,7 +8,6 @@ from typing import Iterable
 import cv2
 import mediapipe as mp
 from mediapipe.tasks.python import vision
-
 from mediapipe.tasks.python.vision import drawing_utils
 from mediapipe.tasks.python.vision.hand_landmarker import HandLandmark
 from mediapipe.tasks.python.vision.hand_landmarker import HandLandmarksConnections
@@ -39,12 +38,12 @@ class FingerState:
 
 
 class HandGestureDetector:
-    """Detects a hand and classifies a few simple gestures."""
+    """Detects up to two hands and classifies a few simple gestures."""
 
     def __init__(
         self,
         model_path: str | Path,
-        max_num_hands: int = 1,
+        max_num_hands: int = 2,
         min_detection_confidence: float = 0.6,
         min_tracking_confidence: float = 0.6,
     ) -> None:
@@ -95,7 +94,7 @@ class HandGestureDetector:
             gesture_name = self._classify_from_landmarks(hand_landmarks)
             classified.append(GestureResult(gesture_name=gesture_name, handedness=label))
 
-        return classified
+        return sorted(classified, key=lambda item: item.handedness)
 
     def _classify_from_landmarks(self, landmarks: Iterable) -> str:
         points = list(landmarks)
@@ -135,6 +134,7 @@ class HandGestureDetector:
         gesture_by_pattern = {
             (True, True, True, True): "open_palm",
             (True, True, False, False): "peace",
+            (True, False, False, False): "point",
         }
 
         if fingers.pattern in gesture_by_pattern:
