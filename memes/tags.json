@@ -1,0 +1,12 @@
+{
+  "images": [
+    {
+      "file": "surprised.jpg",
+      "tags": ["surprised", "wow", "meme"]
+    },
+    {
+      "file": "cinema.png",
+      "tags": ["neutral", "open_palm", "left_open_palm", "right_open_palm", "meme"]
+    }
+  ]
+}

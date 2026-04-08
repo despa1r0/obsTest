@@ -9,6 +9,7 @@ from typing import Iterable
 @dataclass(slots=True)
 class MemeMatch:
     file_name: str
+    file_path: Path
     score: int
     matched_tags: list[str]
 
@@ -38,7 +39,8 @@ class MemeLibrary:
                 continue
 
             match = MemeMatch(
-                file_name=entry["file"],
+                file_name=entry["file_name"],
+                file_path=entry["file_path"],
                 score=len(matched_tags),
                 matched_tags=matched_tags,
             )
@@ -55,7 +57,26 @@ class MemeLibrary:
 
             with tags_path.open("r", encoding="utf-8") as file:
                 payload = json.load(file)
+
             images = payload.get("images", [])
-            return [entry for entry in images if entry.get("file") and entry.get("tags")]
+            entries: list[dict] = []
+            for entry in images:
+                image_name = entry.get("file")
+                tags = entry.get("tags")
+                if not image_name or not tags:
+                    continue
+
+                image_path = self._memes_dir / image_name
+                if not image_path.exists():
+                    continue
+
+                entries.append(
+                    {
+                        "file_name": image_name,
+                        "file_path": image_path,
+                        "tags": tags,
+                    }
+                )
+            return entries
 
         return []
