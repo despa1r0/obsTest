@@ -1,33 +1,36 @@
 # obsTest
 
-MVP для проекта, где Python-скрипт читает жесты рук и мимику с камеры, подбирает похожий мем из папки `memes`, а затем этот результат можно будет отдавать в OBS Virtual Camera для Zoom, Google Meet и других приложений.
+MVP-проект, где Python-скрипт распознаёт жесты рук и мимику, выбирает подходящий мем из папки `memes`, показывает его в локальном preview и может отправлять выбранную картинку в OBS через `obs-websocket`.
 
-## Что уже работает
+## Что уже умеет
 
-- захват видео с веб-камеры через OpenCV;
-- распознавание до двух рук через MediaPipe Hand Landmarker;
-- базовые жесты:
-  - `open_palm`
-  - `fist`
-  - `peace`
-  - `thumbs_up`
-  - `point`
-- распознавание 5 базовых эмоций лица через MediaPipe Face Landmarker:
-  - `happy`
-  - `sad`
-  - `angry`
-  - `surprised`
-  - `neutral`
-- простая сборка тегов кадра из жестов и эмоции;
-- поиск наиболее подходящего мема по тегам из `memes/tags.json` или `memes/tags.example.json`;
-- вывод текущих распознанных данных поверх видео в реальном времени.
+- читать камеру через OpenCV;
+- распознавать до двух рук через MediaPipe Hand Landmarker;
+- распознавать 5 эмоций лица через MediaPipe Face Landmarker;
+- собирать теги кадра из жестов и эмоции;
+- выбирать мем по правилам из `memes/tags.json`;
+- поддерживать строгие условия через `required_tags`;
+- поддерживать анимации мема через поле `effect`;
+- показывать чистый режим и debug-режим по клавише `D`;
+- отправлять активный мем в OBS `Image Source`, если включён OBS-режим.
 
-## Что пока не сделано
+## Жесты и эмоции
 
-- автоматическая подмена видеоисточника в OBS;
-- отправка выбранной картинки в OBS scene/source;
-- переключение источника в OBS Virtual Camera;
-- более умное ранжирование мемов по визуальному сходству, а не только по тегам.
+Жесты:
+
+- `open_palm`
+- `fist`
+- `peace`
+- `thumbs_up`
+- `point`
+
+Эмоции:
+
+- `happy`
+- `sad`
+- `angry`
+- `surprised`
+- `neutral`
 
 ## Запуск
 
@@ -35,20 +38,16 @@ MVP для проекта, где Python-скрипт читает жесты р
 .venv\Scripts\python.exe -m app.main
 ```
 
-Если виртуальное окружение ещё не активировано:
+Если окружение ещё не активировано:
 
 ```powershell
 .venv\Scripts\Activate.ps1
 python -m app.main
 ```
 
-Для эмоций нужен файл модели `models/face_landmarker.task`.
+## Формат мемов
 
-## Как готовить мемы
-
-1. Положите картинки в папку `memes`.
-2. Создайте рядом файл `memes/tags.json`.
-3. Опишите для каждой картинки теги жестов и эмоций.
+Каждый мем описывается в `memes/tags.json`.
 
 Пример:
 
@@ -56,18 +55,64 @@ python -m app.main
 {
   "images": [
     {
-      "file": "double_peace_cat.jpg",
-      "tags": ["peace", "left_peace", "right_peace", "happy", "meme"]
+      "file": "surprised.jpg",
+      "required_tags": ["surprised"],
+      "tags": ["surprised", "wow", "meme"],
+      "effect": "fade",
+      "priority": 10
+    },
+    {
+      "file": "cinema.png",
+      "required_tags": ["neutral", "left_open_palm", "right_open_palm"],
+      "tags": ["neutral", "open_palm", "left_open_palm", "right_open_palm", "meme"],
+      "effect": "reveal",
+      "priority": 30
     }
   ]
 }
 ```
 
-## Следующий шаг для OBS
+Поля:
 
-Практичный следующий этап:
+- `file`: имя картинки в папке `memes`
+- `required_tags`: обязательные теги, без них мем не сработает
+- `tags`: дополнительные теги для матчинга
+- `effect`: `fade` или `reveal`
+- `priority`: приоритет, если несколько мемов подходят сразу
 
-1. При совпадении тегов выбирать файл мема.
-2. Передавать путь к нему в OBS через `obs-websocket`.
-3. Обновлять `Image Source` в отдельной сцене.
-4. Включать в Zoom или Meet виртуальную камеру OBS.
+## OBS режим
+
+Скрипт умеет обновлять OBS `Image Source` через `obs-websocket`.
+
+Нужны переменные окружения:
+
+```powershell
+$env:OBS_ENABLED="1"
+$env:OBS_HOST="localhost"
+$env:OBS_PORT="4455"
+$env:OBS_PASSWORD="your_password"
+$env:OBS_IMAGE_SOURCE_NAME="MemeImage"
+$env:OBS_SCENE_NAME="MemeScene"
+.venv\Scripts\python.exe -m app.main
+```
+
+`OBS_SCENE_NAME` можно не задавать, если сцену переключать не нужно.
+
+## Как настроить OBS
+
+1. В OBS откройте `Tools -> WebSocket Server Settings`.
+2. Включите `Enable WebSocket server`.
+3. Запомните порт и пароль.
+4. Создайте новую сцену, например `MemeScene`.
+5. Добавьте в неё `Image Source`, например `MemeImage`.
+6. Укажите любую стартовую картинку.
+7. Запустите скрипт с переменными окружения для OBS.
+8. Запустите `Start Virtual Camera` в OBS.
+9. В Zoom, Meet или другом приложении выберите `OBS Virtual Camera`.
+
+## Что ещё дальше
+
+- добавить режим, где Python сам полностью формирует итоговый кадр для OBS;
+- сгладить эмоции и жесты по нескольким кадрам;
+- добавить отдельные задержки активации для разных мемов;
+- добавить управление настройками через файл конфигурации.

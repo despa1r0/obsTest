@@ -10,6 +10,7 @@ import numpy as np
 from app.face_emotion_detector import EmotionResult, FaceEmotionDetector
 from app.gesture_detector import GestureResult, HandGestureDetector
 from app.meme_library import MemeLibrary, MemeMatch
+from app.obs_controller import ObsConfig, ObsController
 
 
 WINDOW_NAME = "Gesture + Face Meme MVP"
@@ -316,6 +317,7 @@ def main() -> None:
     hand_detector = HandGestureDetector(model_path=MODEL_PATH, max_num_hands=2)
     face_detector = FaceEmotionDetector(model_path=FACE_MODEL_PATH, max_num_faces=1)
     meme_library = MemeLibrary(MEMES_DIR)
+    obs_controller = ObsController(ObsConfig.from_env())
     display_state = DisplayState()
     image_cache: dict[str, np.ndarray | None] = {}
     debug_enabled = False
@@ -327,6 +329,11 @@ def main() -> None:
     print("Hands: up to 2 hands. Face: 5 basic emotions.")
     print("Default view is clean. Press D to toggle debug overlays.")
     print("Press Esc to stop the script. You can also press Q or close the window.")
+    if obs_controller.enabled:
+        if obs_controller.connect():
+            print("OBS sync is enabled and connected.")
+        else:
+            print(f"OBS sync is enabled but connection failed: {obs_controller.last_error}")
 
     if not meme_library.has_entries():
         print("No meme tags found yet. Add memes/tags.json to enable matching.")
@@ -356,6 +363,7 @@ def main() -> None:
             raw_match = meme_library.find_best_match(tags)
 
             update_display_state(display_state, raw_match, now_seconds)
+            obs_controller.sync_match(display_state.active_match)
 
             if debug_enabled:
                 draw_labels(frame, gestures, emotion, raw_match, display_state.active_match, tags)
@@ -381,6 +389,7 @@ def main() -> None:
         pass
     finally:
         print("Stopping camera stream.")
+        obs_controller.close()
         face_detector.close()
         hand_detector.close()
         capture.release()
