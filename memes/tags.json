@@ -2,11 +2,17 @@
   "images": [
     {
       "file": "surprised.jpg",
-      "tags": ["surprised", "wow", "meme"]
+      "required_tags": ["surprised"],
+      "tags": ["surprised", "wow", "meme"],
+      "effect": "fade",
+      "priority": 10
     },
     {
       "file": "cinema.png",
-      "tags": ["neutral", "open_palm", "left_open_palm", "right_open_palm", "meme"]
+      "required_tags": ["neutral", "left_open_palm", "right_open_palm"],
+      "tags": ["neutral", "open_palm", "left_open_palm", "right_open_palm", "meme"],
+      "effect": "reveal",
+      "priority": 30
     }
   ]
 }

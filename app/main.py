@@ -17,11 +17,11 @@ MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "hand_landmarke
 FACE_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "face_landmarker.task"
 MEMES_DIR = Path(__file__).resolve().parent.parent / "memes"
 QUIT_KEYS = {27, ord("q"), ord("Q")}
+DEBUG_TOGGLE_KEYS = {ord("d"), ord("D")}
 PREVIEW_PANEL_WIDTH = 360
 ACTIVATION_DELAY_SECONDS = 0.75
 FADE_DURATION_SECONDS = 0.8
-SPECIAL_REVEAL_DURATION_SECONDS = 5.1
-SPECIAL_REVEAL_FILES = {"cinema.png"}
+REVEAL_DURATION_SECONDS = 5.1
 
 
 @dataclass(slots=True)
@@ -55,10 +55,6 @@ def same_match(left: MemeMatch | None, right: MemeMatch | None) -> bool:
 def smoothstep(progress: float) -> float:
     clipped = max(0.0, min(1.0, progress))
     return clipped * clipped * (3.0 - 2.0 * clipped)
-
-
-def is_special_reveal_match(match: MemeMatch | None) -> bool:
-    return match is not None and match.file_name.lower() in SPECIAL_REVEAL_FILES
 
 
 def update_display_state(
@@ -133,17 +129,18 @@ def build_placeholder(preview_width: int, preview_height: int) -> np.ndarray:
     return placeholder
 
 
-def apply_special_reveal(
+def apply_match_effect(
     image: np.ndarray,
+    match: MemeMatch | None,
     state: DisplayState,
     now_seconds: float,
 ) -> np.ndarray:
-    if not is_special_reveal_match(state.active_match):
+    if match is None:
+        return image
+    if match.effect != "reveal":
         return image
 
-    reveal_progress = smoothstep(
-        (now_seconds - state.active_since) / SPECIAL_REVEAL_DURATION_SECONDS
-    )
+    reveal_progress = smoothstep((now_seconds - state.active_since) / REVEAL_DURATION_SECONDS)
     background = np.full_like(image, 28)
     return cv2.addWeighted(background, 1 - reveal_progress, image, reveal_progress, 0)
 
@@ -153,6 +150,7 @@ def build_preview_panel(
     state: DisplayState,
     image_cache: dict[str, np.ndarray | None],
     now_seconds: float,
+    debug_enabled: bool,
 ) -> np.ndarray:
     panel = np.full((frame_height, PREVIEW_PANEL_WIDTH, 3), 24, dtype=np.uint8)
 
@@ -173,8 +171,12 @@ def build_preview_panel(
     placeholder = build_placeholder(preview_width, preview_height)
 
     active_source = get_match_image(state.active_match, image_cache)
-    active_image = fit_image(active_source, preview_width, preview_height) if active_source is not None else placeholder
-    active_image = apply_special_reveal(active_image, state, now_seconds)
+    active_image = (
+        fit_image(active_source, preview_width, preview_height)
+        if active_source is not None
+        else placeholder
+    )
+    active_image = apply_match_effect(active_image, state.active_match, state, now_seconds)
 
     transition_elapsed = now_seconds - state.transition_started_at
     if state.active_match is not None and transition_elapsed < FADE_DURATION_SECONDS:
@@ -201,25 +203,49 @@ def build_preview_panel(
         cv2.LINE_AA,
     )
 
-    if state.candidate_match is not None and not same_match(state.candidate_match, state.active_match):
-        remaining = max(0.0, ACTIVATION_DELAY_SECONDS - (now_seconds - state.candidate_since))
+    if debug_enabled:
+        debug_text = "Debug: ON"
         cv2.putText(
             panel,
-            f"Pending: {state.candidate_match.file_name}",
-            (18, frame_height - 48),
+            debug_text,
+            (18, frame_height - 106),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.55,
-            (160, 220, 255),
+            (120, 255, 120),
             2,
             cv2.LINE_AA,
         )
+
+        if state.candidate_match is not None and not same_match(state.candidate_match, state.active_match):
+            remaining = max(0.0, ACTIVATION_DELAY_SECONDS - (now_seconds - state.candidate_since))
+            cv2.putText(
+                panel,
+                f"Pending: {state.candidate_match.file_name}",
+                (18, frame_height - 48),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (160, 220, 255),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                panel,
+                f"Hold steady: {remaining:.2f}s",
+                (18, frame_height - 22),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (160, 220, 255),
+                2,
+                cv2.LINE_AA,
+            )
+    else:
         cv2.putText(
             panel,
-            f"Hold steady: {remaining:.2f}s",
+            "Press D for debug",
             (18, frame_height - 22),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.55,
-            (160, 220, 255),
+            (170, 170, 170),
             2,
             cv2.LINE_AA,
         )
@@ -239,9 +265,7 @@ def draw_labels(
 
     if gestures:
         for gesture in gestures:
-            hud_lines.append(
-                (f"Hand {gesture.handedness}: {gesture.gesture_name}", (0, 255, 0))
-            )
+            hud_lines.append((f"Hand {gesture.handedness}: {gesture.gesture_name}", (0, 255, 0)))
     else:
         hud_lines.append(("Hands: not detected", (0, 0, 255)))
 
@@ -255,6 +279,10 @@ def draw_labels(
     active_name = active_match.file_name if active_match is not None else "no active meme"
     hud_lines.append((f"Raw match: {raw_name}", (180, 180, 180)))
     hud_lines.append((f"Displayed meme: {active_name}", (255, 255, 0)))
+
+    if raw_match is not None:
+        hud_lines.append((f"Required tags: {', '.join(raw_match.required_tags) or 'none'}", (180, 220, 255)))
+        hud_lines.append((f"Effect: {raw_match.effect} | Priority: {raw_match.priority}", (180, 220, 255)))
 
     if tags:
         hud_lines.append((f"Frame tags: {', '.join(tags)}", (210, 210, 210)))
@@ -290,13 +318,14 @@ def main() -> None:
     meme_library = MemeLibrary(MEMES_DIR)
     display_state = DisplayState()
     image_cache: dict[str, np.ndarray | None] = {}
+    debug_enabled = False
 
     if not capture.isOpened():
         raise RuntimeError("Could not open the default camera.")
 
     print("Camera stream started.")
     print("Hands: up to 2 hands. Face: 5 basic emotions.")
-    print("Meme preview is shown on the right with hold-delay smoothing.")
+    print("Default view is clean. Press D to toggle debug overlays.")
     print("Press Esc to stop the script. You can also press Q or close the window.")
 
     if not meme_library.has_entries():
@@ -317,8 +346,9 @@ def main() -> None:
             hand_results = hand_detector.process_frame(frame, timestamp_ms)
             face_results = face_detector.process_frame(frame, timestamp_ms)
 
-            hand_detector.draw_landmarks(frame, hand_results)
-            face_detector.draw_landmarks(frame, face_results)
+            if debug_enabled:
+                hand_detector.draw_landmarks(frame, hand_results)
+                face_detector.draw_landmarks(frame, face_results)
 
             gestures = hand_detector.classify(hand_results)
             emotion = face_detector.classify(face_results)
@@ -326,18 +356,25 @@ def main() -> None:
             raw_match = meme_library.find_best_match(tags)
 
             update_display_state(display_state, raw_match, now_seconds)
-            draw_labels(frame, gestures, emotion, raw_match, display_state.active_match, tags)
+
+            if debug_enabled:
+                draw_labels(frame, gestures, emotion, raw_match, display_state.active_match, tags)
 
             preview_panel = build_preview_panel(
                 frame_height=frame.shape[0],
                 state=display_state,
                 image_cache=image_cache,
                 now_seconds=now_seconds,
+                debug_enabled=debug_enabled,
             )
             output_frame = compose_output_frame(frame, preview_panel)
 
             cv2.imshow(WINDOW_NAME, output_frame)
             key = cv2.waitKey(1) & 0xFF
+            if key in DEBUG_TOGGLE_KEYS:
+                debug_enabled = not debug_enabled
+                print(f"Debug mode: {'ON' if debug_enabled else 'OFF'}")
+                continue
             if should_stop(WINDOW_NAME, key):
                 break
     except KeyboardInterrupt:

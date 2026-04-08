@@ -12,6 +12,9 @@ class MemeMatch:
     file_path: Path
     score: int
     matched_tags: list[str]
+    required_tags: list[str]
+    effect: str
+    priority: int
 
 
 class MemeLibrary:
@@ -23,28 +26,40 @@ class MemeLibrary:
         return bool(self._entries)
 
     def find_best_match(self, tags: Iterable[str]) -> MemeMatch | None:
-        normalized_tags = {
-            tag.strip().lower()
-            for tag in tags
-            if tag and tag.strip()
-        }
+        normalized_tags = {tag.strip().lower() for tag in tags if tag and tag.strip()}
         if not normalized_tags:
             return None
 
         best_match: MemeMatch | None = None
+        best_rank: tuple[int, int, int, int] | None = None
+
         for entry in self._entries:
-            entry_tags = {tag.lower() for tag in entry.get("tags", [])}
-            matched_tags = sorted(normalized_tags & entry_tags)
-            if not matched_tags:
+            required_tags = entry["required_tags"]
+            if any(tag not in normalized_tags for tag in required_tags):
                 continue
 
+            entry_tags = set(entry["tags"])
+            matched_tags = sorted(normalized_tags & entry_tags)
+            if not matched_tags and not required_tags:
+                continue
+
+            rank = (
+                entry["priority"],
+                len(required_tags),
+                len(matched_tags),
+                len(entry_tags),
+            )
             match = MemeMatch(
                 file_name=entry["file_name"],
                 file_path=entry["file_path"],
                 score=len(matched_tags),
                 matched_tags=matched_tags,
+                required_tags=required_tags,
+                effect=entry["effect"],
+                priority=entry["priority"],
             )
-            if best_match is None or match.score > best_match.score:
+            if best_rank is None or rank > best_rank:
+                best_rank = rank
                 best_match = match
 
         return best_match
@@ -62,8 +77,9 @@ class MemeLibrary:
             entries: list[dict] = []
             for entry in images:
                 image_name = entry.get("file")
-                tags = entry.get("tags")
-                if not image_name or not tags:
+                tags = self._normalize_list(entry.get("tags", []))
+                required_tags = self._normalize_list(entry.get("required_tags", []))
+                if not image_name or not (tags or required_tags):
                     continue
 
                 image_path = self._memes_dir / image_name
@@ -75,8 +91,21 @@ class MemeLibrary:
                         "file_name": image_name,
                         "file_path": image_path,
                         "tags": tags,
+                        "required_tags": required_tags,
+                        "effect": str(entry.get("effect", "fade")).strip().lower() or "fade",
+                        "priority": int(entry.get("priority", 0)),
                     }
                 )
             return entries
 
         return []
+
+    @staticmethod
+    def _normalize_list(values: Iterable[str]) -> list[str]:
+        return sorted(
+            {
+                str(value).strip().lower()
+                for value in values
+                if str(value).strip()
+            }
+        )
