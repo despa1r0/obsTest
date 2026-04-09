@@ -164,6 +164,15 @@ def get_overlay_alpha(
     return 1.0
 
 
+def get_obs_opacity(
+    state: DisplayState,
+    now_seconds: float,
+) -> float:
+    if state.active_match is None:
+        return 0.0
+    return get_overlay_alpha(state.active_match, state, now_seconds)
+
+
 def build_camera_overlay_frame(
     camera_frame: np.ndarray,
     state: DisplayState,
@@ -461,7 +470,10 @@ def main() -> None:
             raw_match = meme_library.find_best_match(tags)
 
             update_display_state(display_state, raw_match, now_seconds)
-            obs_controller.sync_match(display_state.active_match)
+            obs_controller.sync_match(
+                display_state.active_match,
+                get_obs_opacity(display_state, now_seconds),
+            )
 
             display_frame = build_camera_overlay_frame(
                 camera_frame=frame,

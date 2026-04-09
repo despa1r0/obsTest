@@ -84,19 +84,40 @@ python -m app.main
 
 Скрипт умеет обновлять OBS `Image Source` через `obs-websocket`.
 
-Нужны переменные окружения:
+Можно использовать переменные окружения или скрытый файл `.env` в корне проекта.
+
+Пример `.env`:
+
+```env
+OBS_ENABLED=1
+OBS_HOST=localhost
+OBS_PORT=4455
+OBS_PASSWORD=your_password
+OBS_IMAGE_SOURCE_NAME=Meme
+OBS_SCENE_NAME=Scene
+OBS_OPACITY_FILTER_NAME=MemeOpacity
+
+CAMERA_INDEX=0
+CAMERA_WIDTH=1280
+CAMERA_HEIGHT=720
+CAMERA_WARMUP_FRAMES=8
+```
+
+Либо временно через PowerShell:
 
 ```powershell
 $env:OBS_ENABLED="1"
 $env:OBS_HOST="localhost"
 $env:OBS_PORT="4455"
 $env:OBS_PASSWORD="your_password"
-$env:OBS_IMAGE_SOURCE_NAME="MemeImage"
-$env:OBS_SCENE_NAME="MemeScene"
+$env:OBS_IMAGE_SOURCE_NAME="Meme"
+$env:OBS_SCENE_NAME="Scene"
+$env:OBS_OPACITY_FILTER_NAME="MemeOpacity"
 .venv\Scripts\python.exe -m app.main
 ```
 
 `OBS_SCENE_NAME` можно не задавать, если сцену переключать не нужно.
+`OBS_OPACITY_FILTER_NAME` должен совпадать с именем Color Correction filter на `Image Source` в OBS, если хотите управлять прозрачностью через OBS.
 
 ## Как настроить OBS
 
@@ -104,11 +125,12 @@ $env:OBS_SCENE_NAME="MemeScene"
 2. Включите `Enable WebSocket server`.
 3. Запомните порт и пароль.
 4. Создайте новую сцену, например `MemeScene`.
-5. Добавьте в неё `Image Source`, например `MemeImage`.
+5. Добавьте в неё `Image Source`, например `Meme`.
 6. Укажите любую стартовую картинку.
-7. Запустите скрипт с переменными окружения для OBS.
-8. Запустите `Start Virtual Camera` в OBS.
-9. В Zoom, Meet или другом приложении выберите `OBS Virtual Camera`.
+7. Добавьте на `Image Source` фильтр `Color Correction`, назовите его `MemeOpacity`.
+8. Запустите скрипт с `.env` или переменными окружения для OBS.
+9. Запустите `Start Virtual Camera` в OBS.
+10. В Zoom, Meet или другом приложении выберите `OBS Virtual Camera`.
 
 ## Что ещё дальше
 
